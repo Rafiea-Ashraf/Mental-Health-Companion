@@ -1,43 +1,53 @@
 import streamlit as st
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
+import torch
 
-# Load the pre-trained GPT-2 model and tokenizer
-tokenizer = GPT2Tokenizer.from_pretrained("DialoGPT-small")
-model = GPT2LMHeadModel.from_pretrained("DialoGPT-small")
+# Load the pre-trained GPT-2 model and tokenizer in a try-except block
+try:
+    tokenizer = GPT2Tokenizer.from_pretrained("DialoGPT-small")
+    model = GPT2LMHeadModel.from_pretrained("DialoGPT-small")
+    st.write("Model and Tokenizer loaded successfully.")
+except Exception as e:
+    st.write(f"Error loading model: {e}")
+    st.stop()
 
 # Initialize session state variables if not already present
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-    
+
 # Limit the number of messages in the chat history to the most recent 5 exchanges (user + bot)
 MAX_HISTORY_LENGTH = 5
 
 # Function to generate detailed response
 def generate_detailed_response(user_input):
-    # Append user input to chat history
-    st.session_state.chat_history.append(f"User: {user_input}")
-    
-    # Limit chat history to the most recent 5 messages (2 * MAX_HISTORY_LENGTH for user + bot messages)
-    if len(st.session_state.chat_history) > MAX_HISTORY_LENGTH * 2:
-        st.session_state.chat_history = st.session_state.chat_history[-MAX_HISTORY_LENGTH * 2:]
+    try:
+        # Append user input to chat history
+        st.session_state.chat_history.append(f"User: {user_input}")
 
-    # Join all previous chat history to form a context for the model
-    bot_input = "\n".join(st.session_state.chat_history)
+        # Limit chat history to the most recent 5 messages (2 * MAX_HISTORY_LENGTH for user + bot messages)
+        if len(st.session_state.chat_history) > MAX_HISTORY_LENGTH * 2:
+            st.session_state.chat_history = st.session_state.chat_history[-MAX_HISTORY_LENGTH * 2:]
 
-    # Encode the input
-    bot_input_ids = tokenizer.encode(bot_input + tokenizer.eos_token, return_tensors='pt')
+        # Join all previous chat history to form a context for the model
+        bot_input = "\n".join(st.session_state.chat_history)
 
-    # Generate response (set a reasonable max length to prevent memory issues)
-    output = model.generate(bot_input_ids, max_length=200, pad_token_id=tokenizer.eos_token_id)
+        # Encode the input
+        bot_input_ids = tokenizer.encode(bot_input + tokenizer.eos_token, return_tensors='pt')
 
-    # Decode the response
-    bot_response = tokenizer.decode(output[:, bot_input_ids.shape[-1]:][0], skip_special_tokens=True)
+        # Generate response (set a reasonable max length to prevent memory issues)
+        output = model.generate(bot_input_ids, max_length=200, pad_token_id=tokenizer.eos_token_id)
 
-    # Append bot's response to chat history
-    st.session_state.chat_history.append(f"Bot: {bot_response}")
+        # Decode the response
+        bot_response = tokenizer.decode(output[:, bot_input_ids.shape[-1]:][0], skip_special_tokens=True)
 
-    # Return the bot's response
-    return bot_response
+        # Append bot's response to chat history
+        st.session_state.chat_history.append(f"Bot: {bot_response}")
+
+        # Return the bot's response
+        return bot_response
+    except Exception as e:
+        st.write(f"Error generating response: {e}")
+        return "Sorry, there was an issue processing your request."
 
 # Streamlit UI
 st.title("Mental Health Companion Chatbot")
