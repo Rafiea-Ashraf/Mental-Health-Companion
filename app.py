@@ -2,10 +2,10 @@ import streamlit as st
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 import torch
 
-# Load the pre-trained DialoGPT model and tokenizer in a try-except block
+# Load the smaller model (distilgpt2) to save memory
 try:
-    tokenizer = GPT2Tokenizer.from_pretrained("DialoGPT-medium")
-    model = GPT2LMHeadModel.from_pretrained("DialoGPT-medium")
+    tokenizer = GPT2Tokenizer.from_pretrained("distilgpt2")
+    model = GPT2LMHeadModel.from_pretrained("distilgpt2")
     st.write("Model and Tokenizer loaded successfully.")
 except Exception as e:
     st.write(f"Error loading model: {e}")
@@ -18,7 +18,7 @@ if "chat_history" not in st.session_state:
 # Limit the number of messages in the chat history to the most recent 5 exchanges (user + bot)
 MAX_HISTORY_LENGTH = 5
 
-# Function to generate a detailed, empathetic response
+# Function to generate a basic response
 def generate_detailed_response(user_input):
     try:
         # Append user input to chat history
