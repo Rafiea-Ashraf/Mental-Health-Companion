@@ -1,65 +1,80 @@
 import streamlit as st
-from transformers import pipeline
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
 from datetime import datetime
 
-# Load the text generation model
+# Load the DialoGPT model and tokenizer
 @st.cache_resource
 def load_model():
-    return pipeline('text-generation', model="distilgpt2")
+    model_name = "microsoft/DialoGPT-medium"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name)
+    return tokenizer, model
 
-model = load_model()
+tokenizer, model = load_model()
 
-# Initialize mood tracker dictionary
-mood_tracker = {}
+# Initialize conversation history for dynamic responses
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-def generate_response(user_input):
-    # Analyzing input to detect distress keywords and give appropriate responses
-    distress_keywords = ["anxious", "stressed", "sad", "lonely", "help", "angry", "upset", "annoyed", "don't feel like talking"]
+# Generate detailed responses based on user input and conversational context
+def generate_detailed_response(user_input):
+    # Append user input to the conversation history
+    new_user_input_ids = tokenizer.encode(user_input + tokenizer.eos_token, return_tensors='pt')
     
-    if any(word in user_input.lower() for word in distress_keywords):
-        response_text = (
-            "I'm here to listen. It sounds like you're going through a tough time. "
-            "Try taking a few slow, deep breaths: breathe in for 4 seconds, hold for 4 seconds, and breathe out slowly. "
-            "This can help you feel a little calmer. \n\n"
-            "Remember, it's okay to feel this way, and I'm here to support you. If it helps, you might want to try writing down "
-            "what’s bothering you, or simply take a break from things for a bit. \n\n"
-            "Would you like information about a support group or a mental health helpline? Just let me know."
-        )
-    else:
-        # Generate response from the model for general or positive inputs
-        response = model(user_input, max_length=50, num_return_sequences=1)
-        response_text = response[0]['generated_text']
-        # Append a positive affirmation
-        response_text += (
-            "\n\nRemember, you're doing great, and even small steps can make a big difference. "
-            "If there's anything else on your mind, feel free to share it with me."
-        )
-    return response_text
+    # Track conversation length and limit tokens
+    bot_input_ids = torch.cat([torch.tensor(st.session_state.chat_history)] + [new_user_input_ids], dim=-1)
+    chat_length = len(bot_input_ids[0])
+    
+    # Generate response
+    output = model.generate(bot_input_ids, max_length=min(chat_length + 100, 1024), pad_token_id=tokenizer.eos_token_id)
+    response_text = tokenizer.decode(output[:, bot_input_ids.shape[-1]:][0], skip_special_tokens=True)
+    
+    # Customize response with empathetic and actionable advice
+    detailed_response = (
+        f"{response_text}\n\n"
+        "**I can sense you're feeling some intense emotions.** It’s completely okay to have days like this. "
+        "Here are a few steps to help you manage:\n\n"
+        
+        "**1. Try a breathing exercise**:\nTake a deep breath, hold for a few seconds, and release slowly. "
+        "Repeat this to help reduce tension.\n\n"
+        
+        "**2. Reflect on any potential triggers**:\nThink back on any recent changes or challenges. "
+        "Understanding what might be causing your feelings can be a big step toward managing them.\n\n"
+        
+        "**3. Consider talking to someone you trust or a professional**:\nSometimes, simply sharing your thoughts "
+        "can lighten the load. There are also support groups and mental health professionals who can help guide you."
+        
+        "\n\n**If you'd like more support resources, let me know, and I’ll provide links to helplines or articles that might help.**"
+    )
+    
+    # Update chat history
+    st.session_state.chat_history.append(new_user_input_ids)
+    st.session_state.chat_history.append(output)
+    
+    return detailed_response
 
 # Streamlit App Interface
 st.title("Mental Health Companion for Teens")
 st.markdown("### Your safe space for mental wellness support 🌈")
 
-# Mood Selection
-st.subheader("How are you feeling right now?")
-mood = st.selectbox("Select your mood", ["Happy", "Calm", "Anxious", "Stressed", "Sad", "Lonely"])
-
-# Save mood with timestamp
-if mood:
-    mood_tracker[datetime.now().strftime("%Y-%m-%d %H:%M:%S")] = mood
-    st.write("Thank you for sharing. We're here to support you.")
-
-# Display mood trend over time
-if st.button("Show Mood Trend"):
-    st.write("Mood Tracker:")
-    st.write(mood_tracker)
-
-# Chatbot Interaction
-user_input = st.text_input("What's on your mind?")
+# Get user input and display response
+user_input = st.text_input("What's on your mind?", placeholder="Share how you're feeling...")
 if user_input:
-    response = generate_response(user_input)
+    response = generate_detailed_response(user_input)
     st.write("Chatbot:", response)
 
-    # Suggest resources if distress is detected
-    if any(word in user_input.lower() for word in ["help", "support", "alone", "distress", "need someone"]):
-        st.write("Consider talking to a support group or helpline if you feel comfortable. Reaching out can make a big difference.")
+    # Display options for more resources if distress is detected
+    if any(keyword in user_input.lower() for keyword in ["help", "support", "alone", "distress", "overwhelmed", "anxious"]):
+        st.write(
+            "It sounds like things might be tough. Would you like resources for mental health support? "
+            "There are many who want to help, and I can provide links to trusted helplines and support networks."
+        )
+
+# Optional: Displaying chat history (for real-time feel)
+st.markdown("### Conversation History")
+for i in range(0, len(st.session_state.chat_history), 2):
+    user_text = tokenizer.decode(st.session_state.chat_history[i], skip_special_tokens=True)
+    bot_text = tokenizer.decode(st.session_state.chat_history[i+1], skip_special_tokens=True)
+    st.write(f"**You:** {user_text}")
+    st.write(f"**Chatbot:** {bot_text}")
