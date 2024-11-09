@@ -34,6 +34,9 @@ def generate_detailed_response(user_input):
         # Encode the input
         bot_input_ids = tokenizer.encode(bot_input + tokenizer.eos_token, return_tensors='pt')
 
+        # Ensure the tensor is of type long (this will avoid the FloatTensor error)
+        bot_input_ids = bot_input_ids.to(torch.long)
+
         # Generate response (set a reasonable max length to prevent memory issues)
         output = model.generate(bot_input_ids, max_length=200, pad_token_id=tokenizer.eos_token_id)
 
