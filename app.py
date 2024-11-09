@@ -18,7 +18,7 @@ if "chat_history" not in st.session_state:
 # Limit the number of messages in the chat history to the most recent 5 exchanges (user + bot)
 MAX_HISTORY_LENGTH = 5
 
-# Function to generate a basic response
+# Function to generate a detailed response
 def generate_detailed_response(user_input):
     try:
         # Append user input to chat history
